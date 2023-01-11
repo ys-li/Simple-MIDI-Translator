@@ -31,7 +31,9 @@ public class SourceReceiver implements Receiver {
      */
     public void send(MidiMessage message, long timeStamp) {
         Console.messageNoLine("RECEIVED: ");
-        MIDITranslate.sendToTarget(message, timeStamp);     // Handed off to translator which sends it to target
+        MIDITranslate.sendToTarget(message, timeStamp, false);     // Handed off to translator which sends it to target
+
+        MIDITranslate.sendToTarget(message, timeStamp + 10, true);     // Handed off to translator which sends it to target
     }
 
     public void close() {}

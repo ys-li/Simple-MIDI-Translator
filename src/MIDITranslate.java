@@ -31,6 +31,7 @@ import java.util.Map;
  */
 public class MIDITranslate {
     private static Map<String, String> TRANSLATION_TABLE = new HashMap();   // <originalMessage, translatedMessage>
+    private static Map<String, String> ON_RELEASE_TABLE = new HashMap();   // <originalMessage, translatedMessage>
     private static final int CC_OFFSET = 176;       // 176-191 are CC status codes
     private static final int PC_OFFSET = 192;       // 192-207 are PC status codes
     private static final int PC_OFFSET_MAX = 207;
@@ -47,6 +48,10 @@ public class MIDITranslate {
                 String[] translationComponents = currentLine.split("\\|");
                 String originalMessage = translationComponents[0];
                 String translatedMessage = translationComponents[1];
+                if (translatedMessage.length() > 2) { // send a release message after some time
+                    String onReleaseMessage = translationComponents[2];
+                    ON_RELEASE_TABLE.put(originalMessage, onReleaseMessage);
+                }
                 TRANSLATION_TABLE.put(originalMessage, translatedMessage);
             }
             Console.info("Mappings file (" + pathToConfig + ") loaded successfully!");
@@ -60,9 +65,15 @@ public class MIDITranslate {
      * Receives a message from the input device, translates it, then sends it to the target device.
      * @param sourceMessage
      * @param timestamp
+     * @param isRelease if set to true, it will send a release message after x ms
      */
-    static void sendToTarget(MidiMessage sourceMessage, long timestamp) {
-        String[] translation = translateMessage(sourceMessage).split(",");  // Split back into Status, PC/CC, Velocity
+    static void sendToTarget(MidiMessage sourceMessage, long timestamp, Boolean isRelease) {
+        String[] translation;
+        try{
+            translation = translateMessage(sourceMessage, isRelease).split(",");  // Split back into Status, PC/CC, Velocity
+        } catch (NullPointerException e) {
+            return;
+        }
         int statusCode = Integer.parseInt(translation[0]);    // PC/CC and Channel
         int dataOne = Integer.parseInt(translation[1]);       // instruction number
         int dataTwo = 0;                                      // velocity if applicable (only for CC)
@@ -85,11 +96,16 @@ public class MIDITranslate {
      * Converts the input message into the corresponding translation if one exists. If one doesn't exist the
      * original instruction passes through unchanged.
      * @param sourceMessage
+     * @param isRelease if set to true, it will translate the message into the release message if any
      * @return String representing translated MIDI instruction
      */
-    private static String translateMessage(MidiMessage sourceMessage) {
+    private static String translateMessage(MidiMessage sourceMessage, Boolean isRelease) {
+        Map<String, String> table = isRelease ? ON_RELEASE_TABLE : TRANSLATION_TABLE;
         String decodedMessage = decodeMessage(sourceMessage.getMessage());
-        String translation = TRANSLATION_TABLE.get(decodedMessage);
+        String translation = table.get(decodedMessage);
+        if (isRelease) {
+            return translation; // return null if not set in ON_RELEASE_TABLE
+        }
         return translation != null ? translation : decodedMessage;
     }
 
